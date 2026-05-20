@@ -9,7 +9,8 @@ allowed-tools: Bash(python3 *)
 Pour calculer l'itinéraire entre plusieurs étapes (road-trip) :
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/routing.py --coords "lat1,lon1 lat2,lon2 lat3,lon3"
+python3 ${CLAUDE_SKILL_DIR}/routing.py --coords "lat1,lon1 lat2,lon2 lat3,lon3" [--auto-hotels] [--max-drive-hours 10.0]
 ```
 
-Renvoie du JSON contenant la distance, le temps de trajet et un lien Google Maps.
+Renvoie du JSON contenant la distance, le temps de trajet et un lien Google Maps. 
+Si `--auto-hotels` est utilisé, le script insérera automatiquement des hôtels trouvés sur la route pour les étapes dépassant `max-drive-hours`, et les inclura dans le trajet.
