@@ -5,12 +5,16 @@ import requests
 import sys
 import os
 
-# Add parent directory to sys.path to import hotels
+# Add parent directory to sys.path to import hotels and geocode
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from hotels.hotels import find_hotels
+    from geocode.geocode import geocode as forward_geocode
+    from geocode.geocode import reverse_geocode
 except ImportError:
     find_hotels = None
+    forward_geocode = None
+    reverse_geocode = None
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -28,6 +32,50 @@ def get_osrm_route(osrm_coords, overview="simplified"):
     except Exception:
         pass
     return None
+
+def get_intermediate_cities(city_depart: str, city_arrivee: str, max_drive_hours: float = 10.0) -> list:
+    """Trouve dynamiquement des villes intermédiaires le long de la route routière entre deux villes,
+    en s'assurant qu'aucun tronçon ne dépasse max_drive_hours.
+    """
+    if not forward_geocode or not reverse_geocode:
+        return []
+        
+    res_dep = forward_geocode(city_depart)
+    res_arr = forward_geocode(city_arrivee)
+    
+    if "error" in res_dep or "error" in res_arr:
+        return []
+        
+    coords_list = [f"{res_dep['lon']},{res_dep['lat']}", f"{res_arr['lon']},{res_arr['lat']}"]
+    route = get_osrm_route(coords_list, overview="full")
+    
+    if not route:
+        return []
+        
+    geom = route.get("geometry", {}).get("coordinates", [])
+    if not geom or len(geom) < 10:
+        return []
+        
+    # Calcul dynamique du nombre de villes nécessaires
+    duration_hours = route.get("duration", 0) / 3600.0
+    num_cities = max(1, int(duration_hours / max_drive_hours))
+    # Limiter à 5 pour ne pas exploser les quotas des APIs Nominatim/Overpass
+    num_cities = min(5, num_cities)
+    
+    cities = []
+    # Générer les fractions pour répartir uniformément les arrêts
+    fractions = [(i + 1) / (num_cities + 1) for i in range(num_cities)]
+    
+    for frac in fractions:
+        idx = int(len(geom) * frac)
+        mid_lon, mid_lat = geom[idx]
+        
+        # Reverse geocode this point
+        city_data = reverse_geocode(mid_lat, mid_lon)
+        if "city" in city_data and city_data["city"] not in cities:
+            cities.append(city_data["city"])
+            
+    return cities
 
 def get_route(coords_list, auto_hotels=False, max_drive_hours=10):
     points = coords_list.strip().split()

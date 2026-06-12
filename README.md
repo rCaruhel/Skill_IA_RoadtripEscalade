@@ -1,37 +1,93 @@
-# 🧗 Skile IA - Climbing & Trip Assistant (Plugin Claude Code)
+# Organisateur de Road-Trips d'Escalade (Agent IA)
 
-Ce projet est un plugin regroupant un ensemble de **skills** conçus pour aider un agent IA (comme Claude Code) à planifier des sessions et voyages d'escalade. 
+Ce projet est un assistant intelligent basé sur un LLM, conçu pour planifier de bout en bout des road-trips d'escalade. Il interprète vos demandes en langage naturel, gère l'ajout d'arrêts intermédiaires, calcule les itinéraires de route, trouve des hôtels, vérifie la météo et cherche les spots d'escalade autour de vos destinations.
 
-Basé sur une architecture "Progressive Disclosure" (faible empreinte token), le plugin n'expose que des descriptions courtes à l'agent. Les scripts associés ne sont exécutés qu'à la demande, garantissant une grande réactivité et une économie de contexte.
+L'objectif principal est de transformer une phrase en langage naturel (ex: "Je veux aller de Paris à Berlin en passant par Strasbourg") en un plan de route Pydantic structuré et validé via diverses APIs géospatiales.
 
-## 🚀 Comment ça marche ? (Pour l'Agent)
+---
 
-En tant qu'agent, tu dois orchestrer ces différents outils en fonction de la demande de l'utilisateur. Voici le flux logique recommandé :
+## Architecture et Structure des Agents
 
-1. L'utilisateur donne un nom de lieu (ex: "Je veux grimper à Annecy").
-2. 📍 **`geocode`** : Utilise ce skill en premier pour convertir le nom de la ville en coordonnées GPS (Latitude/Longitude).
-3. 🧗 **`climbing_spots`** : Une fois les coordonnées obtenues, utilise ce skill pour trouver les falaises ou salles d'escalade dans un rayon donné.
-4. ⛅ **`climbing_weather`** : Passe les coordonnées exactes du spot trouvé à ce skill pour vérifier si le rocher est sec et à bonne température.
-5. 🏨 **`hotels`** (Optionnel) : Si l'utilisateur souhaite rester sur place, utilise ce skill pour trouver des hébergements autour du spot et obtenir un prix estimé.
-6. 🗺️ **`climbing_routing`** (Optionnel) : Si l'utilisateur demande un trajet ou fait un road-trip, passe la liste de toutes les coordonnées (départ, hôtel, spots) à ce skill pour générer le temps de trajet global et le lien Google Maps avec étapes.
+Le système repose sur une architecture en 3 phases, combinant un contrôle strict en Python et la flexibilité d'un agent Langchain.
 
-## 📦 Les 5 Skills inclus
+### Phase 1 : L'Extracteur d'Intention
+- Fichier clé : orchestrator/models.py
+- L'utilisateur interagit via la console. Son entrée texte est analysée par un LLM contraint pour correspondre au modèle Pydantic UserIntent. 
+- Le système extrait les points de départ, d'arrivée, les étapes, et le besoin d'hôtels.
+- Si le voyage est incomplet, le script Python pose des questions interactives ("Voulez-vous faire des arrêts ?").
 
-Chaque skill est autonome et possède son propre script CLI Python :
+### Phase 2 : Validation et Arbre de Décision Python
+- Fichier clé : orchestrator/agent.py
+- Le script Python effectue des vérifications :
+  1. Il vérifie si les villes demandées existent réellement à l'aide de l'outil de géocodage.
+  2. Si l'utilisateur mentionne une ville introuvable, le système détecte l'erreur avant d'aller plus loin.
+  3. L'agent Langchain final reçoit alors l'instruction de ne pas requêter les APIs de météo ou de routes pour les villes inexistantes, afin d'économiser du temps et des ressources.
 
-- **`geocode/`** : Traduit un nom de lieu en coordonnées GPS.
-- **`climbing_spots/`** : Radar à falaises (Outdoor) et salles d'escalade (Indoor) via Overpass API.
-- **`climbing_weather/`** : Analyseur météo (Open-Meteo) pour trouver les meilleures fenêtres de tir (sec, jour, température).
-- **`hotels/`** : Chercheur d'auberges et hôtels avec algorithme d'estimation de prix.
-- **`climbing_routing/`** : Planificateur de road-trip (OSRM) supportant de multiples étapes.
+### Phase 3 : L'Agent Langchain ReAct
+- Fichiers clés : orchestrator/agent.py, orchestrator/tools.py
+- Une fois les villes validées, un agent Langchain prend le relais avec plusieurs outils :
+  - outil_routing : Calcule la distance, la durée et génère le lien Google Maps via OSRM.
+  - outil_weather : Vérifie la météo locale.
+  - outil_hotels : Récupère des recommandations d'hébergement.
+  - outil_spots_par_ville : Recherche des spots d'escalade.
+- Le LLM utilise de façon autonome ces outils pour combler son manque de données en temps réel, fournit un résumé textuel, et remplit un objet JSON structuré (TripPlan).
 
-## 🛠️ Installation & Dépendances
+---
 
-1. Installer les bibliothèques requises :
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. (Pour Claude Code) Copier les dossiers des skills dans le répertoire des plugins de Claude :
-   ```bash
-   cp -r geocode climbing_spots climbing_weather hotels climbing_routing ~/.claude/skills/
-   ```
+## Installation et Configuration
+
+### Prérequis
+- Python 3.10 ou supérieur.
+- Ollama installé localement.
+
+### Dépendances Python
+Installez les librairies requises :
+```bash
+pip install -r requirements.txt
+```
+
+### Configuration LLM (.env)
+
+Le projet est nativement configuré pour fonctionner avec un modèle local (Ollama). **Il a été testé et validé avec la version Ollama 0.30.7.**
+
+Toutefois, le système a été conçu pour être facilement modifiable afin de supporter d'autres modèles LLM commerciaux via des clés API.
+
+1. Si vous utilisez Ollama en local, téléchargez le modèle Llama 3.1 :
+```bash
+ollama run llama3.1
+```
+
+2. Créez un fichier `.env` à la racine de votre projet avec la structure suivante pour configurer votre LLM :
+
+```env
+# Choisissez le backend LLM : ollama, mistral, gemini, openai, ou anthropic
+LLM_BACKEND=ollama
+
+# Si vous avez choisi "ollama", indiquez le modèle cible (par défaut llama3.1)
+OLLAMA_MODEL=llama3.1
+
+# ---------------------------------------------------------
+# Si vous avez choisi un autre backend, renseignez la clé API correspondante :
+# (Décommentez la ligne de votre choix)
+# MISTRAL_API_KEY=votre_cle_mistral
+# GOOGLE_API_KEY=votre_cle_gemini
+# OPENAI_API_KEY=votre_cle_openai
+# ANTHROPIC_API_KEY=votre_cle_anthropic
+```
+
+En modifiant `LLM_BACKEND` (par exemple vers `gemini` ou `openai`) et en fournissant la clé API associée, l'assistant utilisera automatiquement ce modèle en ligne à la place du modèle local.
+
+---
+
+## Comment utiliser le projet
+
+Pour lancer l'assistant interactif, exécutez le script suivant :
+
+```bash
+python orchestrator/agent.py
+```
+
+Le programme démarrera et vous posera des questions. Vous pouvez indiquer un trajet direct ou un point de chute unique. Le système vous proposera d'ajouter des étapes sur la route.
+Une fois les informations confirmées, l'agent se mettra au travail, appellera les outils nécessaires et vous résumera l'itinéraire calculé.
+
+Tapez "quit" ou "exit" à n'importe quel moment pour quitter le programme.

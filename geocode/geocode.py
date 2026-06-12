@@ -26,6 +26,34 @@ def geocode(city_name: str):
     except Exception as e:
         return {"error": str(e)}
 
+def reverse_geocode(lat: float, lon: float):
+    """Trouve la ville correspondant à des coordonnées GPS via Nominatim."""
+    url = "https://nominatim.openstreetmap.org/reverse"
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "format": "json"
+    }
+    headers = {
+        "User-Agent": "Skile_IA_Climbing_Agent/1.0"
+    }
+    try:
+        response = requests.get(url, params=params, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        if "address" in data:
+            addr = data["address"]
+            # Cherche la ville, le village ou le bourg
+            city = addr.get("city", addr.get("town", addr.get("village", addr.get("municipality"))))
+            if city:
+                return {"city": city, "lat": lat, "lon": lon}
+            else:
+                return {"error": "No city found at these coordinates"}
+        else:
+            return {"error": "No address found"}
+    except Exception as e:
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Geocode a city name to coordinates.")
     parser.add_argument("--city", required=True, help="Name of the city to geocode")

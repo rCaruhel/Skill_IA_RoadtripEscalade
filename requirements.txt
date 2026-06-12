@@ -1,2 +1,10 @@
 requests
+langchain
+langchain-ollama
+python-dotenv
 pydantic
+langgraph
+langchain-google-genai
+langchain-anthropic
+langchain-mistralai
+langchain-openai
